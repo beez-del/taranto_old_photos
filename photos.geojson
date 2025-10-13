@@ -1,0 +1,27 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [17.242, 40.471] 
+      },
+      "properties": {
+        "title": "Castello Aragonese",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/fb/Castello_Aragonese_Taranto.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [17.251, 40.464] 
+      },
+      "properties": {
+        "title": "Kathedrála San Cataldo",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/9b/Taranto_Duomo_San_Cataldo.jpg"
+      }
+    }
+  ]
+}
