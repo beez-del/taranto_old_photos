@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
   <meta charset="utf-8"/>
-  <title>Taranto – old photos</title>
+  <title>Mapa Taranto – MapLibre + Fotky</title>
   <link href="https://unpkg.com/maplibre-gl@3/dist/maplibre-gl.css" rel="stylesheet"/>
   <script src="https://unpkg.com/maplibre-gl@3/dist/maplibre-gl.js"></script>
   <style>
@@ -11,64 +11,150 @@
     .maplibregl-popup-content { padding: 10px; }
     .maplibregl-popup-content h3 { margin: 0 0 10px 0; }
     
-    /* Indikátor použitého stylu */
     .style-indicator {
       position: absolute;
       top: 10px;
       right: 10px;
-      background: rgba(255,255,255,0.9);
-      padding: 5px 10px;
+      background: rgba(255,255,255,0.95);
+      padding: 8px 12px;
       border-radius: 4px;
       font-size: 12px;
+      font-weight: bold;
       z-index: 1;
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      transition: all 0.3s;
     }
-    .style-indicator.maptiler { color: #2196F3; }
-    .style-indicator.free { color: #4CAF50; }
+    .style-indicator.maptiler { background: #e3f2fd; color: #1976d2; }
+    .style-indicator.free { background: #e8f5e9; color: #388e3c; }
+    .style-indicator.error { background: #ffebee; color: #c62828; }
+    .style-indicator.loading { background: #fff3e0; color: #f57c00; }
   </style>
 </head>
 <body>
 <div id="map"></div>
-<div class="style-indicator" id="styleIndicator">Načítám...</div>
+<div class="style-indicator loading" id="styleIndicator">⏳ Načítám mapu...</div>
 
 <script>
   // ============================================
-  // KONFIGURACE - ZMĚŇ PODLE POTŘEBY
+  // KONFIGURACE
   // ============================================
   
-  const USE_MAPTILER = false;  // ← Přepni na false pro použití OpenFreeMap
+  const PREFER_MAPTILER = true;  // ← Chceš primárně MapTiler?
+  const AUTO_FALLBACK = true;    // ← Automaticky přepnout při chybě?
   
-  // Automatická volba stylu
-  const mapStyle = USE_MAPTILER 
-    ? './my-style.json'        // MapTiler (s tvým API klíčem)
-    : './my-style-free.json';  // OpenFreeMap (bez API klíče)
+  // ============================================
+  // INTELIGENTNÍ VÝBĚR STYLU
+  // ============================================
+  
+  let currentProvider = 'maptiler';
+  let map = null;
+  
+  // Kontrola, jestli už dříve selhal MapTiler (v localStorage)
+  const maptilerFailed = localStorage.getItem('maptiler-failed') === 'true';
+  
+  if (maptilerFailed && AUTO_FALLBACK) {
+    console.warn('⚠️ MapTiler dříve selhal, používám OpenFreeMap');
+    currentProvider = 'free';
+  } else if (PREFER_MAPTILER) {
+    currentProvider = 'maptiler';
+  } else {
+    currentProvider = 'free';
+  }
+  
+  const mapStyle = currentProvider === 'maptiler' 
+    ? './my-style.json' 
+    : './my-style-free.json';
 
   // ============================================
   // INICIALIZACE MAPY
   // ============================================
   
-  const map = new maplibregl.Map({
-    container: 'map',
-    style: mapStyle,
-    center: [17.25, 40.47], 
-    zoom: 12
-  });
+  function initMap() {
+    map = new maplibregl.Map({
+      container: 'map',
+      style: mapStyle,
+      center: [17.25, 40.47], 
+      zoom: 12
+    });
 
-  map.addControl(new maplibregl.NavigationControl());
+    map.addControl(new maplibregl.NavigationControl());
 
-  map.on('load', () => {
-    console.log(`✅ Mapa načtena! Používám: ${USE_MAPTILER ? 'MapTiler' : 'OpenFreeMap'}`);
+    // ============================================
+    // DETEKCE CHYB A AUTOMATICKÝ FALLBACK
+    // ============================================
     
-    // Aktualizuj indikátor
-    const indicator = document.getElementById('styleIndicator');
-    if (USE_MAPTILER) {
-      indicator.textContent = '🔑 MapTiler';
-      indicator.className = 'style-indicator maptiler';
-    } else {
-      indicator.textContent = '🌍 OpenFreeMap';
-      indicator.className = 'style-indicator free';
-    }
+    let errorCount = 0;
+    const MAX_ERRORS = 3;
     
+    map.on('error', (e) => {
+      console.error('❌ Chyba mapy:', e.error);
+      errorCount++;
+      
+      const indicator = document.getElementById('styleIndicator');
+      
+      // Detekce chyb API klíče nebo rate limitu
+      const is401 = e.error && (e.error.status === 401 || e.error.status === 403);
+      const is429 = e.error && e.error.status === 429; // Rate limit
+      const isTileError = e.error && e.error.message && 
+                         e.error.message.includes('tiles');
+      
+      if ((is401 || is429 || isTileError) && currentProvider === 'maptiler') {
+        console.error('🚨 MapTiler problém detekován:', {
+          status: e.error.status,
+          message: e.error.message
+        });
+        
+        if (AUTO_FALLBACK) {
+          indicator.textContent = '⚠️ Přepínám na záložní mapu...';
+          indicator.className = 'style-indicator error';
+          
+          // Uložit do localStorage, aby se příště rovnou použil free
+          localStorage.setItem('maptiler-failed', 'true');
+          
+          // Restart s free stylem po 2 sekundách
+          setTimeout(() => {
+            console.log('🔄 Restartuji s OpenFreeMap...');
+            currentProvider = 'free';
+            map.remove(); // Zničit starou mapu
+            location.reload(); // Restart stránky
+          }, 2000);
+        } else {
+          indicator.textContent = '❌ MapTiler nedostupný';
+          indicator.className = 'style-indicator error';
+        }
+      } else if (errorCount > MAX_ERRORS) {
+        indicator.textContent = '❌ Chyba načítání mapy';
+        indicator.className = 'style-indicator error';
+      }
+    });
+
+    // ============================================
+    // NAČTENÍ DAT PO STARTU MAPY
+    // ============================================
+    
+    map.on('load', () => {
+      console.log(`✅ Mapa načtena! Provider: ${currentProvider}`);
+      
+      const indicator = document.getElementById('styleIndicator');
+      if (currentProvider === 'maptiler') {
+        indicator.textContent = '🔑 MapTiler';
+        indicator.className = 'style-indicator maptiler';
+        // Vyčisti localStorage pokud funguje
+        localStorage.removeItem('maptiler-failed');
+      } else {
+        indicator.textContent = '🌍 OpenFreeMap';
+        indicator.className = 'style-indicator free';
+      }
+      
+      loadMapData();
+    });
+  }
+  
+  // ============================================
+  // NAČTENÍ GEOJSON DAT
+  // ============================================
+  
+  function loadMapData() {
     // --- Hranice města ---
     fetch('./taranto.geojson')
       .then(res => {
@@ -96,7 +182,9 @@
         });
         map.fitBounds(bounds, { padding: 30 });
       })
-      .catch(err => console.error('❌ Chyba při načítání taranto.geojson:', err));
+      .catch(err => {
+        console.error('❌ Chyba při načítání taranto.geojson:', err);
+      });
 
     // --- Fotky ---
     fetch('./photos.geojson')
@@ -108,7 +196,6 @@
         console.log('✅ Photos data načtena');
         map.addSource('photos', { type: 'geojson', data });
         
-        // Kruhy pro fotky
         map.addLayer({
           id: 'photo-points',
           type: 'circle',
@@ -122,7 +209,7 @@
           }
         });
 
-        // Popup po kliknutí
+        // Popup
         map.on('click', 'photo-points', (e) => {
           const coords = e.features[0].geometry.coordinates.slice();
           const props = e.features[0].properties;
@@ -135,7 +222,6 @@
             .addTo(map);
         });
 
-        // Změna kurzoru na "ručičku"
         map.on('mouseenter', 'photo-points', () => { 
           map.getCanvas().style.cursor = 'pointer'; 
         });
@@ -143,21 +229,24 @@
           map.getCanvas().style.cursor = ''; 
         });
       })
-      .catch(err => console.error('❌ Chyba při načítání photos.geojson:', err));
-  });
-
-  // Zachycení chyb mapy (např. neplatný API klíč)
-  map.on('error', (e) => {
-    console.error('❌ Chyba mapy:', e.error);
-    
-    // Pokud selže MapTiler, automaticky přepni na free
-    if (USE_MAPTILER && e.error && e.error.status === 401) {
-      console.warn('⚠️ MapTiler API klíč je neplatný! Zkus přepnout USE_MAPTILER na false');
-      document.getElementById('styleIndicator').textContent = '❌ Chybný API klíč';
-      document.getElementById('styleIndicator').style.color = 'red';
-    }
-  });
+      .catch(err => {
+        console.error('❌ Chyba při načítání photos.geojson:', err);
+      });
+  }
+  
+  // ============================================
+  // START
+  // ============================================
+  
+  initMap();
+  
+  // Debug info do konzole
+  console.log('🗺️ Mapová aplikace Taranto');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('Provider:', currentProvider);
+  console.log('Auto-fallback:', AUTO_FALLBACK ? 'ANO ✅' : 'NE ❌');
+  console.log('MapTiler dříve selhal?', maptilerFailed ? 'ANO ⚠️' : 'NE');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 </script>
 </body>
 </html>
-
