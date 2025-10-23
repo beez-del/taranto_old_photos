@@ -3,12 +3,13 @@
 <head>
   <meta charset="utf-8"/>
   <title>Mapa Taranto – MapLibre + Fotky</title>
-  <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet"/>
-  <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
-  <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@3/dist/maplibre-gl.css" rel="stylesheet"/>
+  <script src="https://unpkg.com/maplibre-gl@3/dist/maplibre-gl.js"></script>
   <style>
     body, #map { margin:0; padding:0; height:100vh; }
     .popup-img { max-width:200px; border-radius:8px; }
+    .maplibregl-popup-content { padding: 10px; }
+    .maplibregl-popup-content h3 { margin: 0 0 10px 0; }
   </style>
 </head>
 <body>
@@ -16,7 +17,8 @@
 <script>
   const map = new maplibregl.Map({
     container: 'map',
-    style: './my-style.json',
+    // Použij veřejný styl místo vlastního
+    style: 'https://demotiles.maplibre.org/style.json',
     center: [17.25, 40.47], 
     zoom: 12
   });
@@ -24,34 +26,53 @@
   map.addControl(new maplibregl.NavigationControl());
 
   map.on('load', () => {
+    console.log('Mapa načtena!');
+    
     // --- Hranice města ---
     fetch('./taranto.geojson')
-      .then(res => res.json())
+      .then(res => {
+        console.log('Načítám taranto.geojson...', res.status);
+        return res.json();
+      })
       .then(data => {
+        console.log('Taranto data:', data);
         map.addSource('taranto', { type: 'geojson', data });
         map.addLayer({
           id: 'taranto-border',
           type: 'line',
           source: 'taranto',
-          paint: { 'line-color': '#FF0000', 'line-width': 2 }
+          paint: { 'line-color': '#FF0000', 'line-width': 3 }
         });
-        const bbox = turf.bbox(data);
-        map.fitBounds(bbox, { padding: 30 });
-      });
+        
+        // Přiblíž na hranice
+        const bounds = new maplibregl.LngLatBounds();
+        data.features[0].geometry.coordinates[0].forEach(coord => {
+          bounds.extend(coord);
+        });
+        map.fitBounds(bounds, { padding: 30 });
+      })
+      .catch(err => console.error('Chyba při načítání taranto.geojson:', err));
 
     // --- Fotky ---
     fetch('./photos.geojson')
-      .then(res => res.json())
+      .then(res => {
+        console.log('Načítám photos.geojson...', res.status);
+        return res.json();
+      })
       .then(data => {
+        console.log('Photos data:', data);
         map.addSource('photos', { type: 'geojson', data });
+        
+        // Použij kruhy místo ikon
         map.addLayer({
           id: 'photo-points',
-          type: 'symbol',
+          type: 'circle',
           source: 'photos',
-          layout: {
-            'icon-image': 'marker-15',
-            'icon-size': 1.5,
-            'icon-allow-overlap': true
+          paint: {
+            'circle-radius': 8,
+            'circle-color': '#FF4444',
+            'circle-stroke-color': '#FFFFFF',
+            'circle-stroke-width': 2
           }
         });
 
@@ -69,9 +90,18 @@
         });
 
         // Změna kurzoru na "ručičku"
-        map.on('mouseenter', 'photo-points', () => { map.getCanvas().style.cursor = 'pointer'; });
-        map.on('mouseleave', 'photo-points', () => { map.getCanvas().style.cursor = ''; });
-      });
+        map.on('mouseenter', 'photo-points', () => { 
+          map.getCanvas().style.cursor = 'pointer'; 
+        });
+        map.on('mouseleave', 'photo-points', () => { 
+          map.getCanvas().style.cursor = ''; 
+        });
+      })
+      .catch(err => console.error('Chyba při načítání photos.geojson:', err));
+  });
+
+  map.on('error', (e) => {
+    console.error('Chyba mapy:', e);
   });
 </script>
 </body>
