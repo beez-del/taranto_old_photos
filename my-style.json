@@ -747,7 +747,7 @@
       "source-layer": "transportation",
       "filter": ["all", ["==", "brunnel", "tunnel"], ["==", "class", "rail"]],
       "paint": {
-        "line-color": "#bbb",
+        "line-color": "rgba(87, 75, 75, 1)",
         "line-dasharray": [2, 2],
         "line-width": {"base": 1.4, "stops": [[14, 0.4], [15, 0.75], [20, 2]]}
       }
@@ -1117,7 +1117,7 @@
         ["!=", "subclass", "steps"]
       ],
       "paint": {
-        "line-color": "rgba(144, 137, 128, 1)",
+        "line-color": "rgba(102, 51, 51, 1)",
         "line-dasharray": [1.5, 0.75],
         "line-width": {"base": 1.2, "stops": [[15, 1.2], [20, 4]]}
       }
@@ -1727,7 +1727,7 @@
       "filter": ["all", ["==", "brunnel", "bridge"], ["==", "class", "rail"]],
       "paint": {
         "line-color": "#574b4b",
-        "line-width": {"base": 1.4, "stops": [[14, 0.4], [15, 0.75], [20, 2]]}
+        "line-width": {"base": 1.4, "stops": [[14, 0.4], [15, 2.5], [20, 13]]}
       }
     },
     {
@@ -1782,7 +1782,7 @@
         ["<=", "admin_level", 8],
         ["!=", "maritime", 1]
       ],
-      "layout": {"line-join": "round", "visibility": "visible"},
+      "layout": {"line-join": "round", "visibility": "none"},
       "paint": {
         "line-color": "#9e9cab",
         "line-dasharray": [3, 1, 1, 1],
