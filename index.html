@@ -17,8 +17,30 @@
 <script>
   const map = new maplibregl.Map({
     container: 'map',
-    // Použij veřejný styl místo vlastního
-    style: 'https://demotiles.maplibre.org/style.json',
+    style: {
+      version: 8,
+      sources: {
+        'osm-tiles': {
+          type: 'raster',
+          tiles: [
+            'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+          ],
+          tileSize: 256,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }
+      },
+      layers: [
+        {
+          id: 'osm-layer',
+          type: 'raster',
+          source: 'osm-tiles',
+          minzoom: 0,
+          maxzoom: 19
+        }
+      ]
+    },
     center: [17.25, 40.47], 
     zoom: 12
   });
@@ -41,7 +63,11 @@
           id: 'taranto-border',
           type: 'line',
           source: 'taranto',
-          paint: { 'line-color': '#FF0000', 'line-width': 3 }
+          paint: { 
+            'line-color': '#FF0000', 
+            'line-width': 3,
+            'line-opacity': 0.8
+          }
         });
         
         // Přiblíž na hranice
@@ -69,10 +95,11 @@
           type: 'circle',
           source: 'photos',
           paint: {
-            'circle-radius': 8,
+            'circle-radius': 10,
             'circle-color': '#FF4444',
             'circle-stroke-color': '#FFFFFF',
-            'circle-stroke-width': 2
+            'circle-stroke-width': 3,
+            'circle-opacity': 0.9
           }
         });
 
