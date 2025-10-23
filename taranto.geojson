@@ -1,1 +1,158 @@
-https://nominatim.openstreetmap.org/search?format=geojson&polygon_geojson=1&q=Taranto
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8"/>
+  <title>Mapa Taranto – MapLibre + Fotky</title>
+  <link href="https://unpkg.com/maplibre-gl@3/dist/maplibre-gl.css" rel="stylesheet"/>
+  <script src="https://unpkg.com/maplibre-gl@3/dist/maplibre-gl.js"></script>
+  <style>
+    body, #map { margin:0; padding:0; height:100vh; }
+    .popup-img { max-width:200px; border-radius:8px; cursor: pointer; }
+    .maplibregl-popup-content { padding: 10px; }
+    .maplibregl-popup-content h3 { margin: 0 0 10px 0; font-size: 14px; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+  // GeoJSON data pro Taranto (zjednodušené hranice)
+  const tarantoData = {
+    "type": "FeatureCollection",
+    "features": [{
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [17.18, 40.52],
+          [17.30, 40.52],
+          [17.30, 40.42],
+          [17.18, 40.42],
+          [17.18, 40.52]
+        ]]
+      },
+      "properties": { "name": "Taranto" }
+    }]
+  };
+
+  // GeoJSON data pro fotky
+  const photosData = {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [17.242, 40.471]
+        },
+        "properties": {
+          "title": "Castello Aragonese",
+          "url": "https://upload.wikimedia.org/wikipedia/commons/f/fb/Castello_Aragonese_Taranto.jpg"
+        }
+      },
+      {
+        "type": "Feature",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [17.251, 40.464]
+        },
+        "properties": {
+          "title": "Katedrála San Cataldo",
+          "url": "https://upload.wikimedia.org/wikipedia/commons/9/9b/Taranto_Duomo_San_Cataldo.jpg"
+        }
+      }
+    ]
+  };
+
+  // Inicializace mapy s OSM stylem
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: {
+      version: 8,
+      sources: {
+        osm: {
+          type: 'raster',
+          tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+          tileSize: 256,
+          attribution: '© OpenStreetMap contributors'
+        }
+      },
+      layers: [{
+        id: 'osm',
+        type: 'raster',
+        source: 'osm',
+        minzoom: 0,
+        maxzoom: 19
+      }]
+    },
+    center: [17.25, 40.47],
+    zoom: 12
+  });
+
+  map.addControl(new maplibregl.NavigationControl());
+
+  map.on('load', () => {
+    // Přidání hranice města
+    map.addSource('taranto', { 
+      type: 'geojson', 
+      data: tarantoData 
+    });
+    
+    map.addLayer({
+      id: 'taranto-border',
+      type: 'line',
+      source: 'taranto',
+      paint: { 
+        'line-color': '#FF0000', 
+        'line-width': 3,
+        'line-opacity': 0.8
+      }
+    });
+
+    // Přidání fotek
+    map.addSource('photos', { 
+      type: 'geojson', 
+      data: photosData 
+    });
+
+    // Kruhové markery pro fotky
+    map.addLayer({
+      id: 'photo-points',
+      type: 'circle',
+      source: 'photos',
+      paint: {
+        'circle-radius': 8,
+        'circle-color': '#FF4444',
+        'circle-stroke-color': '#FFFFFF',
+        'circle-stroke-width': 2
+      }
+    });
+
+    // Popup po kliknutí
+    map.on('click', 'photo-points', (e) => {
+      const coords = e.features[0].geometry.coordinates.slice();
+      const props = e.features[0].properties;
+      
+      new maplibregl.Popup()
+        .setLngLat(coords)
+        .setHTML(`
+          <h3>${props.title}</h3>
+          <img class="popup-img" src="${props.url}" alt="${props.title}" 
+               onclick="window.open('${props.url}', '_blank')"/>
+          <p style="font-size: 11px; color: #666; margin: 5px 0 0 0;">
+            Klikněte na obrázek pro zvětšení
+          </p>
+        `)
+        .addTo(map);
+    });
+
+    // Změna kurzoru
+    map.on('mouseenter', 'photo-points', () => { 
+      map.getCanvas().style.cursor = 'pointer'; 
+    });
+    map.on('mouseleave', 'photo-points', () => { 
+      map.getCanvas().style.cursor = ''; 
+    });
+  });
+</script>
+</body>
+</html>
