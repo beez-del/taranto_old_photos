@@ -33,6 +33,9 @@
 <body>
 <div id="map"></div>
 <div class="style-indicator loading" id="styleIndicator">⏳ Načítám mapu...</div>
+<button id="resetBtn" style="position:absolute; bottom:10px; right:10px; z-index:1; padding:8px 12px; background:#fff; border:1px solid #ccc; border-radius:4px; cursor:pointer; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+  🔄 Reset cache
+</button>
 
 <script>
   // ============================================
@@ -73,8 +76,13 @@
     map = new maplibregl.Map({
       container: 'map',
       style: mapStyle,
-      center: [17.25, 40.47], 
-      zoom: 12
+      bounds: [
+        [17.2027153, 40.4306006], // Southwest (levý dolní roh)
+        [17.2945542, 40.4966856]  // Northeast (pravý horní roh)
+      ],
+      fitBoundsOptions: {
+        padding: 20
+      }
     });
 
     map.addControl(new maplibregl.NavigationControl());
@@ -87,43 +95,54 @@
     const MAX_ERRORS = 3;
     
     map.on('error', (e) => {
-      console.error('❌ Chyba mapy:', e.error);
+      console.error('❌ Chyba mapy:', e);
       errorCount++;
       
       const indicator = document.getElementById('styleIndicator');
       
       // Detekce chyb API klíče nebo rate limitu
-      const is401 = e.error && (e.error.status === 401 || e.error.status === 403);
-      const is429 = e.error && e.error.status === 429; // Rate limit
-      const isTileError = e.error && e.error.message && 
-                         e.error.message.includes('tiles');
+      const errorObj = e.error || e;
+      const errorStatus = errorObj.status;
+      const errorMessage = errorObj.message || '';
       
-      if ((is401 || is429 || isTileError) && currentProvider === 'maptiler') {
-        console.error('🚨 MapTiler problém detekován:', {
-          status: e.error.status,
-          message: e.error.message
-        });
+      const is401 = errorStatus === 401 || errorStatus === 403;
+      const is429 = errorStatus === 429; // Rate limit
+      const isTileError = errorMessage.includes('tiles') || 
+                         errorMessage.includes('source') ||
+                         errorObj.url;
+      
+      console.log('Debug chyby:', { 
+        status: errorStatus, 
+        message: errorMessage,
+        provider: currentProvider,
+        errorCount 
+      });
+      
+      // Pouze pokud je to MapTiler a skutečná chyba API
+      if ((is401 || is429) && currentProvider === 'maptiler') {
+        console.error('🚨 MapTiler API problém detekován');
         
         if (AUTO_FALLBACK) {
           indicator.textContent = '⚠️ Přepínám na záložní mapu...';
           indicator.className = 'style-indicator error';
           
-          // Uložit do localStorage, aby se příště rovnou použil free
           localStorage.setItem('maptiler-failed', 'true');
           
-          // Restart s free stylem po 2 sekundách
           setTimeout(() => {
-            console.log('🔄 Restartuji s OpenFreeMap...');
+            console.log('🔄 Restartuji s OSM fallback...');
             currentProvider = 'free';
-            map.remove(); // Zničit starou mapu
-            location.reload(); // Restart stránky
+            map.remove();
+            location.reload();
           }, 2000);
         } else {
           indicator.textContent = '❌ MapTiler nedostupný';
           indicator.className = 'style-indicator error';
         }
-      } else if (errorCount > MAX_ERRORS) {
-        indicator.textContent = '❌ Chyba načítání mapy';
+      } 
+      // Pokud je free provider a má hodně chyb, je problém
+      else if (currentProvider === 'free' && errorCount > MAX_ERRORS) {
+        console.warn('⚠️ Příliš mnoho chyb u free providera');
+        indicator.textContent = '⚠️ Problémy s načítáním';
         indicator.className = 'style-indicator error';
       }
     });
@@ -155,32 +174,16 @@
   // ============================================
   
   function loadMapData() {
-    // --- Hranice města ---
+    // --- Hranice města (skryté, jen pro referenci) ---
     fetch('./taranto.geojson')
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then(data => {
-        console.log('✅ Taranto data načtena');
+        console.log('✅ Taranto data načtena (hranice skryty)');
+        // Přidáme source, ale nevytvoříme layer - hranice nebudou vidět
         map.addSource('taranto', { type: 'geojson', data });
-        map.addLayer({
-          id: 'taranto-border',
-          type: 'line',
-          source: 'taranto',
-          paint: { 
-            'line-color': '#FF0000', 
-            'line-width': 3,
-            'line-opacity': 0.8
-          }
-        });
-        
-        // Přiblíž na hranice
-        const bounds = new maplibregl.LngLatBounds();
-        data.features[0].geometry.coordinates[0].forEach(coord => {
-          bounds.extend(coord);
-        });
-        map.fitBounds(bounds, { padding: 30 });
       })
       .catch(err => {
         console.error('❌ Chyba při načítání taranto.geojson:', err);
@@ -240,6 +243,15 @@
   
   initMap();
   
+  // Reset cache tlačítko
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    if (confirm('Vymazat cache a zkusit znovu MapTiler?')) {
+      localStorage.clear();
+      alert('Cache vymazána! Stránka se restartuje...');
+      location.reload();
+    }
+  });
+  
   // Debug info do konzole
   console.log('🗺️ Mapová aplikace Taranto');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -247,6 +259,8 @@
   console.log('Auto-fallback:', AUTO_FALLBACK ? 'ANO ✅' : 'NE ❌');
   console.log('MapTiler dříve selhal?', maptilerFailed ? 'ANO ⚠️' : 'NE');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('💡 Pro reset cache: localStorage.clear() nebo klikni na tlačítko');
+
 </script>
 </body>
 </html>
